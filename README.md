@@ -1,4 +1,4 @@
-# ![pyOptViewer](assets/pyoptviewer_logo.svg) pyOptViewer
+# ![pyOptViewer](assets/logo.svg) pyOptViewer
 
 ![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
