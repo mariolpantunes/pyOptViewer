@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>pyOptViewer</title>
+        <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+        <link rel="stylesheet" href="/static/style.css" />
+        <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+        <script type="module" src="/static/js/main.js"></script>
+    </head>
+    <body>
+        <div class="app">
+            <aside class="sidebar">
+                <header class="brand">
+                    <img src="/assets/favicon.svg" alt="" />
+                    <h1>pyOptViewer</h1>
+                </header>
+
+                <section>
+                    <h2>Problem</h2>
+                    <label>Objective function <select id="function"></select></label>
+                    <p class="hint" id="functionHint"></p>
+                </section>
+
+                <section>
+                    <h2>Initialisation</h2>
+                    <label>Sampler <select id="sampler"></select></label>
+                    <label>Strategy <select id="strategy"></select></label>
+                    <div class="row">
+                        <label>Population <input type="number" id="popSize" value="30" min="2" max="500" /></label>
+                        <label>Seed <input type="number" id="seed" value="42" /></label>
+                    </div>
+                </section>
+
+                <section>
+                    <h2>Algorithm</h2>
+                    <label>Optimizer <select id="algorithm"></select></label>
+                    <div id="params" class="params"></div>
+                    <div class="row">
+                        <label>Epochs <input type="number" id="epochs" value="100" min="1" max="5000" /></label>
+                        <label title="Stop when best − f* ≤ threshold (0 disables)">Stop gap <input type="number" id="threshold" value="0" min="0" step="any" /></label>
+                    </div>
+                    <label class="inline" title="The optimizer computes each epoch as playback reaches it; pausing pauses the optimizer. Off: compute the whole run at once, then replay.">
+                        <input type="checkbox" id="optLive" checked /> Live: evolve at playback speed
+                    </label>
+                </section>
+
+                <button id="runBtn" class="primary">Run</button>
+                <p class="status" id="status">Ready</p>
+
+                <section class="stats">
+                    <div><span>Epoch</span><b id="statEpoch">0</b></div>
+                    <div><span>Best f</span><b id="statBest">–</b></div>
+                    <div><span>Gap to f*</span><b id="statGap">–</b></div>
+                    <div><span>Mean f</span><b id="statMean">–</b></div>
+                    <div><span>Diversity</span><b id="statDiv">–</b></div>
+                    <div><span>Population</span><b id="statPop">–</b></div>
+                </section>
+            </aside>
+
+            <main class="main">
+                <div class="controls">
+                    <div class="toolbar">
+                        <div class="transport">
+                            <button id="firstBtn" title="First epoch (Home)">⏮</button>
+                            <button id="prevBtn" title="Previous epoch (←)">◀</button>
+                            <button id="playBtn" class="play" title="Play / pause (Space)">▶</button>
+                            <button id="nextBtn" title="Next epoch (→)">▶|</button>
+                            <button id="lastBtn" title="Last epoch (End)">⏭</button>
+                        </div>
+                        <input type="range" id="scrub" min="0" max="0" step="any" value="0" />
+                        <span class="epoch" id="epochLabel">0 / 0</span>
+                        <label class="inline">Speed
+                            <select id="speed">
+                                <option value="1">1 ep/s</option>
+                                <option value="2">2 ep/s</option>
+                                <option value="4" selected>4 ep/s</option>
+                                <option value="8">8 ep/s</option>
+                                <option value="16">16 ep/s</option>
+                                <option value="32">32 ep/s</option>
+                            </select>
+                        </label>
+                        <div class="toggles">
+                            <label class="inline"><input type="checkbox" id="optSmooth" checked /> Smooth motion</label>
+                            <label class="inline"><input type="checkbox" id="optLog" checked /> Log fitness scale</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panels3d">
+                    <section class="panel">
+                        <div class="panel-head"><h3>True Landscape &amp; Population</h3></div>
+                        <div id="plotMain" class="plot"></div>
+                    </section>
+                    <section class="panel">
+                        <div class="panel-head"><h3>Explored Surface Reconstruction</h3></div>
+                        <div id="plotExplored" class="plot"></div>
+                    </section>
+                </div>
+
+                <div class="panels2d">
+                    <section class="panel space">
+                        <div class="panel-head">
+                            <h3>Search space (2D)</h3>
+                            <span class="readout" id="hover"></span>
+                            <div class="toggles">
+                                <label class="inline"><input type="checkbox" id="optTrails" checked /> Trails</label>
+                                <label class="inline"><input type="checkbox" id="optVisited" /> Visited</label>
+                                <label class="inline"><input type="checkbox" id="optContours" checked /> Contours</label>
+                            </div>
+                        </div>
+                        <div class="canvas-wrap"><canvas id="space"></canvas></div>
+                        <div class="legend">
+                            <span><i class="dot pop"></i>individual</span>
+                            <span><i class="dot improved"></i>improved this epoch</span>
+                            <span><i class="dot best"></i>best so far</span>
+                            <span><i class="dot optimum"></i>global optimum</span>
+                        </div>
+                    </section>
+
+                    <section class="panel conv">
+                        <div class="panel-head"><h3>Convergence (gap to f*)</h3></div>
+                        <div id="plotConv" class="plot"></div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </body>
+</html>
