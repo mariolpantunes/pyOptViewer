@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyOptViewer"
+version = "2.0.0"
+description = "Real-time web visualisation of pyBlindOpt derivative-free optimizers on 2D landscapes."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Mário Antunes" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pyBlindOpt>=0.5.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+optviewer = "optviewer.__main__:main"
+
+[dependency-groups]
+test = ["httpx>=0.27", "coverage>=7"]
+
+[tool.setuptools]
+packages = ["optviewer"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.basedpyright]
+venvPath = "."
+venv = "venv"
+typeCheckingMode = "standard"
+include = ["optviewer", "tests"]
+
+[tool.coverage.run]
+source = ["optviewer"]
+
+[tool.vulture]
+paths = ["optviewer", "tests"]
+min_confidence = 80

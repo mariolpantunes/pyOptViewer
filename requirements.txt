@@ -1,2 +1,0 @@
-pyBlindOpt>=0.2.5
-Flask>=3.1.2
