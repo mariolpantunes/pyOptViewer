@@ -206,10 +206,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# AI agent helpers: working notes, plans and per-agent local state.
-# Project standards for agents (CLAUDE.md, AGENTS.md) stay tracked.
+# AI agent helpers: instructions, working notes, plans and per-agent local state.
 .agent/
 PLAN.md
+CLAUDE.md
+AGENTS.md
 .claude/
 CLAUDE.local.md
 .goose/
