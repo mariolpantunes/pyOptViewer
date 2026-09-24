@@ -1,0 +1,119 @@
+# The CI gate, moved to commit time.
+# Derived from .github/workflows/ci.yml: change both in the same commit.
+#
+# Every hook is `language: system`, not a pinned mirror: a mirror runs its own
+# copy of the tool against a config pre-commit chose, so hooks pass while CI
+# fails. Tools read `pyproject.toml`, so commit and CI use the same settings.
+#
+# `pass_filenames: false` on whole-project tools: basedpyright and vulture need
+# every file, or everything staged files reference looks unreferenced.
+#
+# `files` rather than `types: [python]`: pyproject.toml drives the hooks, so a
+# commit that changes only that file must still run them.
+#
+# Layout: the package is ./optviewer (no src/), tests are in ./tests, so
+# PYTHONPATH=. makes the working tree, not an installed copy, the one tested.
+#
+# Install with: pre-commit install
+# Run over everything once: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  - repo: local
+    hooks:
+      # Resolve the venv the way the runner does, before anything reads it.
+      #
+      # CI installs the project into a clean machine, so every dependency comes
+      # from PyPI. A developer venv drifts the moment a sibling (e.g. a local
+      # pyBlindOpt checkout) is installed editable, and an editable install
+      # *satisfies* the requirement, so `pip install` alone never undoes it. The
+      # venv then reports the right version while loading unreleased source, and
+      # a local check passes against code the runner cannot see. Editable
+      # installs are removed first, which is the part `pip install` cannot do.
+      #
+      # Installs runtime deps (via the package) plus the `test` dependency group
+      # from pyproject.toml (pip >= 25.1). Lint tools stay on the system.
+      - id: venv-matches-ci
+        name: venv matches CI
+        entry: >-
+          bash -c '
+          [ -d venv ] || python -m venv venv;
+          eds=$(venv/bin/pip list --editable --format=freeze 2>/dev/null
+          | sed "s/[=@ ].*//" | grep -vix pyOptViewer || true);
+          [ -n "$eds" ] && venv/bin/pip uninstall -y -q $eds;
+          venv/bin/pip install -q --upgrade . --group test'
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: ruff
+        name: ruff (optviewer, tests)
+        entry: ruff check optviewer tests
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: ruff-format
+        name: ruff format --check
+        # Check only: a hook that rewrites files leaves the commit half-staged.
+        entry: ruff format --check optviewer tests
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: basedpyright
+        name: basedpyright
+        # Reads the venv through [tool.basedpyright] venvPath/venv in pyproject.toml.
+        entry: basedpyright
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: vulture
+        name: vulture
+        # Paths and confidence come from [tool.vulture] in pyproject.toml.
+        entry: vulture
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: js-syntax
+        name: node --check (static/js)
+        # The frontend has no build step, so a syntax error would only surface
+        # as a blank page in the browser.
+        entry: bash -c 'for f in static/js/*.js; do node --check "$f" || exit 1; done'
+        language: system
+        files: '^static/js/.*\.js$'
+        pass_filenames: false
+
+      - id: unittest
+        name: unittest
+        # venv/bin/python, not a bare `python`: the PATH interpreter lacks this
+        # project's dependencies, so every test module fails to import.
+        entry: env PYTHONPATH=. venv/bin/python -m unittest discover -s tests -q
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
+
+      - id: coverage
+        name: coverage (unittest, --fail-under)
+        # Same run as `unittest`, measured, kept separate so a coverage drop
+        # reads as a coverage failure. The floor ratchets: raise it when the
+        # number rises, never lower it to make a commit pass.
+        entry: >-
+          bash -c 'PYTHONPATH=. venv/bin/python -m coverage run --source=optviewer
+          -m unittest discover -s tests -q && venv/bin/python -m coverage report
+          --fail-under=90'
+        language: system
+        files: '(\.py$|^pyproject\.toml$)'
+        pass_filenames: false
