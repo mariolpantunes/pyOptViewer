@@ -12,85 +12,109 @@ This tool is designed for **education and research**, allowing users to visually
 
 ## Key Features
 
-* **Real-Time Visualization**: Watch the population evolve generation-by-generation using **Server-Sent Events (SSE)**.
-* **Dual-View Analysis**:
-    * *True Landscape*: See the agents moving on the actual function surface.
-    * *Explored Surface*: Visualize the "mental map" of the algorithm (the mesh constructed strictly from visited points).
-* **High Performance**: Uses **Web Workers** to offload data processing, ensuring smooth 60fps rendering even with large populations.
-* **Advanced Initialization**: Native support for modern initialization strategies including **Opposition-Based Learning (OBL)**, **Sobol Sequences**, and **Chaotic Maps**.
-* **Interactive Control**: Adjust population size, epochs, delay speed, and stopping thresholds on the fly.
+Page layout, top to bottom:
+
+1. **Playback bar** (sticky): play/pause, step, scrub, speed (1–32 epochs/s), smooth motion, log fitness scale.
+2. **Dual 3D view** (core, cameras synchronised):
+    * *True Landscape & Population*: the agents on the actual function surface.
+    * *Explored Surface Reconstruction*: the algorithm's "mental map", a Delaunay-triangulated `mesh3d` (`alphahull: -1`) over every point visited up to the current epoch, coloured by fitness.
+3. **2D search space** next to the **convergence plot**:
+    * A log-scaled heatmap with contours, showing the moving population, fading trails, a halo on individuals that improved this epoch, the best-so-far marker, the global optimum and, optionally, every visited point.
+    * Best and mean gap to the known optimum `f*`, with a cursor that follows playback.
+
+The sidebar holds the configuration and live statistics: epoch, best, gap to `f*`, mean, diversity and population size.
+
+**Live evolution** (default): a custom pyBlindOpt callback (`LiveCallback` in `optviewer/runs.py`) publishes every generation as it is computed. It then blocks the optimizer thread until the viewer's playback cursor is at most 2 epochs behind. The population evolves at the speed you watch it: pausing or stepping pauses or steps pyBlindOpt itself, and the 2-epoch lookahead gives the animation a next frame to ease towards. Untick *Live* to compute the whole run at once and replay it. Every computed epoch is kept, so you can scrub back at any time. One FastAPI process serves the UI, a REST API for setup and a WebSocket for live frames.
+
+Keyboard: `Space` play/pause, `←`/`→` step, `Home`/`End` first/last epoch.
 
 ## Supported Algorithms & Methods
 
-**pyOptViewer** exposes the full power of the underlying library:
+Everything in [pyBlindOpt](https://github.com/mariolpantunes/pyBlindOpt) ≥ 0.5.0 is exposed, including each algorithm's hyperparameters:
 
-| Category | Algorithms |
+| Family | Algorithms |
 | :--- | :--- |
-| **Swarm Intelligence** | Particle Swarm Optimization (PSO), Grey Wolf Optimization (GWO) |
-| **Evolutionary** | Differential Evolution (DE), Genetic Algorithm (GA) |
-| **Local Search** | Hill Climbing (HC), Simulated Annealing (SA) |
-| **Baseline** | Random Search (RS) |
+| **Baseline** | Random Search |
+| **Local search** | Hill Climbing, Simulated Annealing |
+| **Evolutionary** | Genetic Algorithm (blend/linear crossover; polynomial/gaussian/random mutation), Differential Evolution (14 variants × policies: fixed, archive, JADE, SHADE, L-SHADE, CoDE, SaDE, ensemble) |
+| **Swarm** | PSO, Grey Wolf, Enhanced Grey Wolf, Artificial Bee Colony, Firefly, Harris Hawks, Cuckoo Search, Honey Badger |
 
-### Initialization Strategies
+**Objective functions** (all on [-5, 5]²): Sphere, Rastrigin, Ackley, Rosenbrock, Griewank, Styblinski-Tang, Levy, Zakharov, Dixon-Price, Schwefel, Lunacek bi-Rastrigin.
 
-* **Standard**: Random (Uniform)
-* **Space-Filling**: Sobol Sequence, Latin Hypercube (LHS)
-* **Chaotic**: Tent Map
-* **Opposition**: OBL, OBLESA (OBL + Empty Space Attack)
+**Initialisation** = a sampler combined with an optional strategy:
+
+* Samplers: Random, Latin Hypercube, Sobol, Chaotic.
+* Strategies: None, OBL, Quasi-OBL, OBLESA, Round.
 
 ## Installation
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/mariolpantunes/pyOptViewer
-    cd pyOptViewer
-    ```
-
-2.  **Create a Virtual Environment (Recommended)**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+git clone https://github.com/mariolpantunes/pyOptViewer
+cd pyOptViewer
+python -m venv venv
+venv/bin/pip install .
+```
 
 ## Usage
 
-1.  **Start the Flask Server**
-    ```bash
-    python app.py
-    ```
+```bash
+venv/bin/python -m optviewer            # http://127.0.0.1:8000
+venv/bin/python -m optviewer --host 0.0.0.0 --port 8080 --reload
+```
 
-2.  **Open the Visualizer**
-    Navigate to `http://127.0.0.1:5000` in your web browser.
+Pick a function, an initialisation and an optimizer. The initial population is previewed as you change them. Press **Run**.
 
-3.  **Configure & Run**
-    * Select an **Objective Function** (e.g., *Rastrigin* for a challenge, *Sphere* for baseline).
-    * Choose an **Algorithm** and **Initialization Method**.
-    * Set the **Population Size** (larger populations explore better but run slower).
-    * Click **Start Optimization**.
+## API
+
+Interactive docs are served at `/docs`.
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/api/config` | Functions (with optima), samplers, strategies, algorithms and their parameter schema |
+| `GET` | `/api/surface/{function}?resolution=N` | Function values on an N×N grid |
+| `POST` | `/api/preview` | Initial population for `{function, sampler, strategy, pop_size, seed}` |
+| `POST` | `/api/runs` | Start a run (preview fields + `algorithm, epochs, threshold, params, live`); returns `id` and `ws` |
+| `GET` | `/api/runs/{id}?since=K` | Status and frames from index K (polling alternative) |
+| `PUT` | `/api/runs/{id}/cursor` | `{index}`: advance a live run (the optimizer may run 2 frames past it) |
+| `DELETE` | `/api/runs/{id}` | Cancel and forget a run |
+| `WS` | `/ws/runs/{id}?since=K` | Buffered frames, then live ones (`{"type": "frame"}`), then `{"type": "end"}`. The client sends `{"type": "cursor", "index": i}` to pace live runs |
+
+A frame is `{epoch, pop, scores, best_pos, best_score, mean_score}`. Frame 0 is the initial population. `threshold` stops the run once `best − f* ≤ threshold`. A live run nobody advances for 5 minutes is cancelled.
+
+## Development
+
+```bash
+venv/bin/pip install -q --upgrade . --group test
+PYTHONPATH=. venv/bin/python -m unittest
+pre-commit install          # run the CI gate on every commit
+pre-commit run --all-files
+```
+
+The pre-commit hooks and `.github/workflows/ci.yml` run the same checks: ruff (lint and format), basedpyright, vulture, `node --check` on `static/js`, unittest, and coverage (≥ 90%). The lint tools are expected on the system (`pipx install ruff basedpyright vulture pre-commit`); the project venv holds only runtime and test dependencies.
 
 ## Project Structure
 
 ```text
 pyOptViewer/
-├── app.py              # Flask backend (SSE streaming & Logic)
+├── optviewer/
+│   ├── registry.py     # Functions, initialisers, algorithms + parameter schema
+│   ├── runs.py         # Threaded runs, frame buffer, subscriptions
+│   ├── server.py       # FastAPI app (REST + WebSocket + static UI)
+│   └── __main__.py     # CLI entry point (uvicorn)
 ├── static/
-│   ├── main.js         # Frontend logic (Plotly & UI handling)
-│   ├── worker.js       # Web Worker (Data accumulation & Mesh generation)
-│   └── style.css       # Nord-themed styling
-├── templates/
-│   └── index.html      # Main application layout
-└── README.md           # Documentation
-
+│   ├── index.html
+│   ├── style.css       # Nord theme
+│   └── js/             # player, 2D canvas view, Plotly panels, API client
+├── assets/
+│   ├── logo.svg        # README logo (light background)
+│   └── favicon.svg     # Tab icon / app badge for the dark UI
+├── tests/
+└── pyproject.toml
 ```
 
 ## Theme
 
-The UI is styled using the **Nord** color palette, providing a clean, distraction-free environment for long research sessions. The 3D plots use the **Viridis** colormap for perceptual uniformity.
+The UI is styled using the **Nord** color palette, providing a clean, distraction-free environment for long research sessions. All views use the **Viridis** colormap for perceptual uniformity.
 
 ## Contributing
 
@@ -111,4 +135,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-*Built with [Flask](), [Plotly.js](), and [pyBlindOpt]().*
+*Built with [FastAPI](https://fastapi.tiangolo.com), [Plotly.js](https://plotly.com/javascript/), and [pyBlindOpt](https://github.com/mariolpantunes/pyBlindOpt).*
